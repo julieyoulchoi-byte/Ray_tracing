@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>렌즈와 거울 실험</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: sans-serif; margin: 0; padding: 16px; background: #fff; color: #222; }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  canvas { width: 100%; max-width: 800px; border: 1px solid #999; background: #fff; display: block; touch-action: pan-y; }
+  .box { max-width: 800px; }
+  .types label { margin-right: 14px; }
+  .row { margin: 8px 0; }
+  .row input[type=range] { width: 60%; vertical-align: middle; }
+  #result { background: #f0f0f0; padding: 10px; margin-top: 10px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>렌즈와 거울 실험</h1>
+
+  <div class="types row">
+    <label><input type="radio" name="type" value="convexLens" checked> 볼록 렌즈</label>
+    <label><input type="radio" name="type" value="concaveLens"> 오목 렌즈</label>
+    <label><input type="radio" name="type" value="concaveMirror"> 오목 거울</label>
+    <label><input type="radio" name="type" value="convexMirror"> 볼록 거울</label>
+  </div>
+
+  <canvas id="c" width="800" height="400"></canvas>
+
+  <div class="row">물체 거리 o: <input type="range" id="o" min="3" max="60" step="0.5" value="25"> <span id="oV"></span> cm</div>
+  <div class="row">초점 거리 f: <input type="range" id="f" min="5" max="30" step="1" value="10"> <span id="fV"></span> cm</div>
+  <div class="row">물체 높이: <input type="range" id="h" min="2" max="12" step="1" value="6"> <span id="hV"></span> cm</div>
+
+  <div id="result"></div>
+  <p>빨강: 축에 평행한 광선, 파랑: 초점 광선, 초록: 중심 광선 (점선은 빛이 실제로 지나가지 않는 연장선)</p>
+  <p>공식: 1/o + 1/i = 1/f, 배율 m = -i/o</p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const S = 6;        // 1cm = 6px
+const Y0 = 200;     // 광축 높이
+
+function getType() {
+  return document.querySelector('input[name=type]:checked').value;
+}
+
+function draw() {
+  const type = getType();
+  const isMirror = type.includes('Mirror');
+  const X0 = isMirror ? 560 : 400;         // 렌즈/거울 위치
+  const o = +document.getElementById('o').value;
+  const fAbs = +document.getElementById('f').value;
+  const h = +document.getElementById('h').value;
+  const f = (type === 'convexLens' || type === 'concaveMirror') ? fAbs : -fAbs;
+
+  document.getElementById('oV').textContent = o;
+  document.getElementById('fV').textContent = f;
+  document.getElementById('hV').textContent = h;
+
+  // cm 좌표(렌즈/거울 기준, 오른쪽이 +, 위쪽이 +) -> 화면 좌표
+  const px = u => X0 + u * S;
+  const py = v => Y0 - v * S;
+
+  ctx.clearRect(0, 0, 800, 400);
+
+  // 광축
+  line(0, Y0, 800, Y0, '#000', 1);
+
+  // 렌즈 / 거울 (두께가 있는 모양)
+  ctx.beginPath();
+  if (type === 'convexLens') {
+    // 가운데가 두꺼운 볼록 렌즈
+    ctx.moveTo(X0, 40);
+    ctx.quadraticCurveTo(X0 + 40, 200, X0, 360);
+    ctx.quadraticCurveTo(X0 - 40, 200, X0, 40);
+  } else if (type === 'concaveLens') {
+    // 가운데가 얇은 오목 렌즈
+    ctx.moveTo(X0 - 16, 40);
+    ctx.lineTo(X0 + 16, 40);
+    ctx.quadraticCurveTo(X0 - 10, 200, X0 + 16, 360);
+    ctx.lineTo(X0 - 16, 360);
+    ctx.quadraticCurveTo(X0 + 10, 200, X0 - 16, 40);
+  } else if (type === 'concaveMirror') {
+    // 앞면(반사면)은 안으로 휘고, 뒤쪽에 두께가 있음
+    ctx.moveTo(X0 - 25, 40);
+    ctx.quadraticCurveTo(X0 + 25, 200, X0 - 25, 360);
+    ctx.lineTo(X0 - 11, 360);
+    ctx.quadraticCurveTo(X0 + 39, 200, X0 - 11, 40);
+  } else {
+    // 볼록 거울
+    ctx.moveTo(X0 + 25, 40);
+    ctx.quadraticCurveTo(X0 - 25, 200, X0 + 25, 360);
+    ctx.lineTo(X0 + 39, 360);
+    ctx.quadraticCurveTo(X0 - 11, 200, X0 + 39, 40);
+  }
+  ctx.closePath();
+  if (isMirror) {
+    ctx.fillStyle = '#999';
+    ctx.strokeStyle = '#333';
+  } else {
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.5)';
+    ctx.strokeStyle = '#06c';
+  }
+  ctx.lineWidth = 2;
+  ctx.fill();
+  ctx.stroke();
+
+  // 초점 표시
+  ctx.fillStyle = '#000';
+  ctx.font = '14px sans-serif';
+  if (isMirror) {
+    dot(px(-f), Y0, 'F');
+  } else {
+    dot(px(-fAbs), Y0, 'F');
+    dot(px(fAbs), Y0, "F'");
+  }
+
+  // 상 계산
+  let i = null, m = null;
+  if (Math.abs(o - f) > 0.01) {
+    i = o * f / (o - f);     // 1/o + 1/i = 1/f
+    m = -i / o;
+  }
+
+  // 물체 (노란색 화살표)
+  drawArrow(px(-o), Y0, py(h), '#e90');
+
+  // 광선 3개
+  // 1) 평행 광선
+  const p0 = [-o, h];
+  const rays = [];
+  rays.push({ color: 'red', pts: [p0, [0, h]], dir: isMirror ? [-f, -h] : [f, -h] });
+  if (f < 0) rays[0].dir = isMirror ? [f, h] : [-f, h];
+  // 2) 초점 광선
+  if (Math.abs(f - o) > 0.01) {
+    const y3 = h * f / (f - o);
+    if (Math.abs(y3) < 30) rays.push({ color: 'blue', pts: [p0, [0, y3]], dir: [isMirror ? -1 : 1, 0] });
+  }
+  // 3) 중심 광선
+  rays.push({ color: 'green', pts: [p0, [0, 0]], dir: isMirror ? [-o, -h] : [o, -h] });
+
+  for (const r of rays) {
+    const a = r.pts[0], b = r.pts[1];
+    const len = Math.hypot(r.dir[0], r.dir[1]);
+    const c = [b[0] + r.dir[0] / len * 200, b[1] + r.dir[1] / len * 200];
+    line(px(a[0]), py(a[1]), px(b[0]), py(b[1]), r.color, 2);
+    line(px(b[0]), py(b[1]), px(c[0]), py(c[1]), r.color, 2);
+  }
+
+  // 상 그리기
+  let text = '';
+  if (i === null) {
+    text = '물체가 초점에 있어서 상이 생기지 않아요. (빛이 평행하게 나가요)';
+  } else {
+    const ui = isMirror ? -i : i;   // 상의 가로 위치
+    const vi = m * h;               // 상의 높이
+    const real = i > 0;
+
+    // 허상이면 점선 연장선
+    if (!real) {
+      for (const r of rays) {
+        const b = r.pts[1];
+        line(px(b[0]), py(b[1]), px(ui), py(vi), r.color, 1, true);
+      }
+    }
+    drawArrow(px(ui), Y0, py(vi), '#808', !real);
+
+    text = '상의 거리 i = ' + i.toFixed(1) + ' cm<br>' +
+           '배율 m = ' + m.toFixed(2) + '<br>' +
+           '결과: <b>' + (real ? '실상' : '허상') + ', ' +
+           (m > 0 ? '정립(똑바로)' : '도립(거꾸로)') + ', ' +
+           (Math.abs(Math.abs(m) - 1) < 0.02 ? '같은 크기' : (Math.abs(m) > 1 ? '확대' : '축소')) + '</b>';
+  }
+  document.getElementById('result').innerHTML = text;
+}
+
+function line(x1, y1, x2, y2, color, w, dashed) {
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w;
+  ctx.setLineDash(dashed ? [6, 5] : []);
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function dot(x, y, label) {
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillText(label, x - 4, y + 20);
+}
+
+// 물체/상 화살표 (x, 바닥 y, 끝 y)
+function drawArrow(x, y0, y1, color, dashed) {
+  const dir = y1 < y0 ? 1 : -1;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.setLineDash(dashed ? [5, 4] : []);
+  ctx.beginPath();
+  ctx.moveTo(x, y0);
+  ctx.lineTo(x, y1);
+  ctx.moveTo(x - 7, y1 + 10 * dir);
+  ctx.lineTo(x, y1);
+  ctx.lineTo(x + 7, y1 + 10 * dir);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// 이벤트
+document.querySelectorAll('input').forEach(el => el.addEventListener('input', draw));
+
+// 물체 끌기
+let dragging = false;
+function moveObj(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * 800 / rect.width;
+  const X0 = getType().includes('Mirror') ? 560 : 400;
+  let o = (X0 - x) / S;
+  o = Math.min(60, Math.max(3, Math.round(o * 2) / 2));
+  document.getElementById('o').value = o;
+  draw();
+}
+canvas.addEventListener('pointerdown', e => { dragging = true; canvas.setPointerCapture(e.pointerId); moveObj(e); });
+canvas.addEventListener('pointermove', e => { if (dragging) moveObj(e); });
+canvas.addEventListener('pointerup', () => dragging = false);
+
+draw();
+</script>
+</body>
+</html>
